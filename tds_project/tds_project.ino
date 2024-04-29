@@ -13,6 +13,8 @@ int copyIndex = 0;
 float averageVoltage = 0;
 float tdsValue = 0;
 float temperature = 25;       // current temperature for compensation
+bool booltds = false;
+
 
 // median filtering algorithm
 int getMedianNum(int bArray[], int iFilterLen){
@@ -41,12 +43,53 @@ int getMedianNum(int bArray[], int iFilterLen){
 void setup(){
   Serial.begin(115200);
   pinMode(TdsSensorPin,INPUT);
+  
 }
 
 void loop(){
-  static unsigned long analogSampleTimepoint = millis();
+
+  for (float tdsValue = 0; tdsValue < 100; tdsValue++) {
+    static unsigned long analogSampleTimepoint = millis();
   if(millis()-analogSampleTimepoint > 40U){     //every 40 milliseconds,read the analog value from the ADC
     analogSampleTimepoint = millis();
     analogBuffer[analogBufferIndex] = analogRead(TdsSensorPin);    //read the analog value and store into the buffer
     analogBufferIndex++;
+    if(analogBufferIndex == SCOUNT){ 
+      analogBufferIndex = 0;
+    }
+  }   
+  
+  static unsigned long printTimepoint = millis();
+  if(millis()-printTimepoint > 800U){
+    printTimepoint = millis();
+    for(copyIndex=0; copyIndex<SCOUNT; copyIndex++){
+      analogBufferTemp[copyIndex] = analogBuffer[copyIndex];
+      
+      // read the analog value more stable by the median filtering algorithm, and convert to voltage value
+      averageVoltage = getMedianNum(analogBufferTemp,SCOUNT) * (float)VREF / 4096.0;
+      
+      //temperature compensation formula: fFinalResult(25^C) = fFinalResult(current)/(1.0+0.02*(fTP-25.0)); 
+      float compensationCoefficient = 1.0+0.02*(temperature-25.0);
+      //temperature compensation
+      float compensationVoltage=averageVoltage/compensationCoefficient;
+      
+      //convert voltage value to tds value
+      tdsValue=(133.42*compensationVoltage*compensationVoltage*compensationVoltage - 255.86*compensationVoltage*compensationVoltage + 857.39*compensationVoltage)*0.5;
+      
+      //Serial.print("voltage:");
+      //Serial.print(averageVoltage,2);
+      //Serial.print("V   ");
+      
+    }
+    Serial.print("TDS Value:");
+      Serial.print(tdsValue,0);
+      Serial.println("ppm");
+  }
+  
+}
+  
+  
+}
    
+    
+  
