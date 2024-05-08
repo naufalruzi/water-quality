@@ -1,9 +1,15 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <WiFi.h>
+#include <ESP32httpUpdate.h>
+#include <WiFiClient.h>
+#include <HTTPClient.h>
 #define TdsSensorPin 27
 #define VREF 3.3              // analog reference voltage(Volt) of the ADC
 #define SCOUNT  30            // sum of sample point
 
+String ssid = "UUMWiFi_Guest", pass = "";
+WiFiClient wifiClient;
 
 // GPIO where the DS18B20 is connected to
 const int oneWireBus = 2;     
@@ -24,12 +30,14 @@ int analogBuffer[SCOUNT];     // store the analog value in the array, read from 
 int analogBufferTemp[SCOUNT];
 int analogBufferIndex = 0;
 int copyIndex = 0;
+float temperatureC = 0;
+int turbidity = 0;
 
 float averageVoltage = 0;
 float tdsValue = 0;
 float temperature = 25;       // current temperature for compensation
 
-int getMedianNum(int bArray[], int iFilterLen){
+int getMedianNum(int bArray[], int iFilterLen){//tds fun function generator
   int bTab[iFilterLen];
   for (byte i = 0; i<iFilterLen; i++)
   bTab[i] = bArray[i];
@@ -51,6 +59,24 @@ int getMedianNum(int bArray[], int iFilterLen){
   }
   return bTemp;
 }
+
+void uploadData() {
+  String request = "http://naufal3003.000webhostapp.com/insertbpm.php?bpm="  + String(ph) + String(temperatureC) + String(turbidity) + String(tdsValue);
+  Serial.println(request);
+  
+  HTTPClient http;
+  http.begin(wifiClient, request);
+  int httpCode = http.GET();
+  if (httpCode == 200) {
+    String responseBody = http.getString();
+    Serial.println(responseBody);
+
+  } else {
+    Serial.println("Error: " + String(httpCode));
+  }
+  http.end();
+      
+}
  
 void setup() {
   // put your setup code here, to run once:
@@ -59,6 +85,17 @@ void setup() {
   pinMode(PHPin,INPUT);
   pinMode(TdsSensorPin,INPUT);
   delay(1000);
+
+  //wifi
+  WiFi.begin(ssid, pass);
+  Serial.println("Connecting");
+  while (WiFi.status() != WL_CONNECTED) {
+  delay(500);
+  Serial.print(".");
+  }
+  Serial.println("");
+  Serial.print("Connected to WiFi network with IP Address: ");
+  Serial.println(WiFi.localIP());
 }
  void loop(){
  
@@ -69,6 +106,7 @@ void setup() {
     float voltage=Value*(3.3/4095.0);
     ph=(3.3*voltage);
     Serial.println(ph);
+    uploadData(ph);
     delay(1000);
 
     //temp sensor
@@ -77,6 +115,7 @@ void setup() {
     float temperatureF = sensors.getTempFByIndex(0);
     Serial.print(temperatureC);
     Serial.print("ºC ");
+    uploadData(temperatureC);
     Serial.print(temperatureF);
     Serial.println("ºF");
     delay(1000);
@@ -86,6 +125,7 @@ void setup() {
     
     int turbidity = map(turbiValue, 0, 750, 100, 0);
     Serial.print(turbidity);
+    uploadData(turbidity);
     // lcd.setCursor(0, 0);
     // lcd.print("Turbidity:");
     // lcd.print("   ");
@@ -110,7 +150,7 @@ void setup() {
     }
 
     //tds sensor
-  for (float tdsValue = 0; tdsValue < 10; tdsValue++) {
+  for (i = 0; i < 10; i++) {
     static unsigned long analogSampleTimepoint = millis();
   if(millis()-analogSampleTimepoint > 40U){     //every 40 milliseconds,read the analog value from the ADC
     analogSampleTimepoint = millis();
@@ -146,6 +186,9 @@ void setup() {
       Serial.print("TDS Value:");
       Serial.print(tdsValue,0);
       Serial.println("ppm");
+      uploadData(tdsValue);
     }
   }
+
+
  }
