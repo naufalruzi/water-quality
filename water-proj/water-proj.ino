@@ -26,9 +26,9 @@ OneWire oneWire(oneWireBus);
 DallasTemperature sensors(&oneWire);
 
 const int PHPin=4;
-float ph;
+float ph ;
 float Value=0;
-int i = 0;
+
 
 int turbidityPin = 34;
 
@@ -39,11 +39,12 @@ int copyIndex = 0;
 float temperatureC = 0;
 int turbidity = 0;
 
+int i = 0;//tds
 float averageVoltage = 0;
 float tdsValue = 0;
 float temperature = 25;       // current temperature for compensation
 
-int getMedianNum(int bArray[], int iFilterLen){//tds fun function generator
+int getMedianNum(int bArray[], int iFilterLen){//tds function generator
   int bTab[iFilterLen];
   for (byte i = 0; i<iFilterLen; i++)
   bTab[i] = bArray[i];
