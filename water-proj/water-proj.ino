@@ -8,7 +8,12 @@
 #define VREF 3.3              // analog reference voltage(Volt) of the ADC
 #define SCOUNT  30            // sum of sample point
 
-String ssid = "UUMWiFi_Guest", pass = "";
+const char* ssid = "UUMWiFi_Guest";
+const char* pass = "";
+String serverName = "http://naufal3003.000webhostapp.com/insertbpm.php?bpm=";
+unsigned long sendDataPrevMillis = 0;
+int count = 0;
+
 WiFiClient wifiClient;
 
 // GPIO where the DS18B20 is connected to
@@ -23,6 +28,7 @@ DallasTemperature sensors(&oneWire);
 const int PHPin=4;
 float ph;
 float Value=0;
+int i = 0;
 
 int turbidityPin = 34;
 
@@ -60,23 +66,6 @@ int getMedianNum(int bArray[], int iFilterLen){//tds fun function generator
   return bTemp;
 }
 
-void uploadData() {
-  String request = "http://naufal3003.000webhostapp.com/insertbpm.php?bpm="  + String(ph) + String(temperatureC) + String(turbidity) + String(tdsValue);
-  Serial.println(request);
-  
-  HTTPClient http;
-  http.begin(wifiClient, request);
-  int httpCode = http.GET();
-  if (httpCode == 200) {
-    String responseBody = http.getString();
-    Serial.println(responseBody);
-
-  } else {
-    Serial.println("Error: " + String(httpCode));
-  }
-  http.end();
-      
-}
  
 void setup() {
   // put your setup code here, to run once:
@@ -98,58 +87,40 @@ void setup() {
   Serial.println(WiFi.localIP());
 }
  void loop(){
- 
- //ph sensor
-    Value= analogRead(PHPin);
-    Serial.print(Value);
-    Serial.print(" | ");
-    float voltage=Value*(3.3/4095.0);
-    ph=(3.3*voltage);
-    Serial.println(ph);
-    uploadData(ph);
-    delay(1000);
 
-    //temp sensor
-    sensors.requestTemperatures(); 
-    float temperatureC = sensors.getTempCByIndex(0);
-    float temperatureF = sensors.getTempFByIndex(0);
-    Serial.print(temperatureC);
-    Serial.print("ºC ");
-    uploadData(temperatureC);
-    Serial.print(temperatureF);
-    Serial.println("ºF");
-    delay(1000);
+  if (millis() - sendDataPrevMillis > 10000 || sendDataPrevMillis == 0) {
+    count++;
+    getTDS();
+    getturbidity();
+    getTemp();
+    getPH();
 
-    //turbidity sensor
-    int turbiValue = analogRead(turbidityPin);
-    
-    int turbidity = map(turbiValue, 0, 750, 100, 0);
-    Serial.print(turbidity);
-    uploadData(turbidity);
-    // lcd.setCursor(0, 0);
-    // lcd.print("Turbidity:");
-    // lcd.print("   ");
-    // lcd.setCursor(10, 0);
-    //lcd.print(turbidity);
-    
-    delay(1000);
-    if ((turbidity > 0) && (turbidity < 50)) {
-      // lcd.setCursor(0, 1);
-      // lcd.print(" its CLEAR ");
-      Serial.println(" its CLEAR ");
-    }
-    if ((turbidity > 20) && (turbidity < 50)) {
-      // lcd.setCursor(0, 1);
-      // lcd.print(" its CLOUDY ");
-      Serial.println(" its CLOUDY ");
-    }
-    if (turbidity > 50) {
-      // lcd.setCursor(0, 1);
-      // lcd.print(" its DIRTY ");
-      Serial.println(" its DIRTY ");
-    }
+    sendDataPrevMillis = millis();
 
-    //tds sensor
+    if (WiFi.status() == WL_CONNECTED) {
+      WiFiClient client;
+      HTTPClient http;
+      String httpReqStr = serverName + "water.php?TDS=" + tdsValue + "&turbidity=" + turbidity + "&Temp=" + temperatureC + "&ph=" + ph;
+      http.begin(client, httpReqStr.c_str());
+      int httpResponseCode = http.GET();
+      if (httpResponseCode > 0) {
+        Serial.print("HTTP Response code: ");
+        Serial.println(httpResponseCode);
+        String payload = http.getString();
+        Serial.println(payload);
+      } else {
+        Serial.print("Error code: ");
+        Serial.println(httpResponseCode);
+      }
+      // Free resources
+      http.end();
+    }
+  }
+
+ }
+
+ void getTDS() {
+  //tds sensor
   for (i = 0; i < 10; i++) {
     static unsigned long analogSampleTimepoint = millis();
   if(millis()-analogSampleTimepoint > 40U){     //every 40 milliseconds,read the analog value from the ADC
@@ -186,9 +157,60 @@ void setup() {
       Serial.print("TDS Value:");
       Serial.print(tdsValue,0);
       Serial.println("ppm");
-      uploadData(tdsValue);
     }
   }
+ }
 
+ void getturbidity(){
+  //turbidity sensor
+    int turbiValue = analogRead(turbidityPin);
+    
+    int turbidity = map(turbiValue, 0, 750, 100, 0);
+    Serial.print(turbidity);
+    // lcd.setCursor(0, 0);
+    // lcd.print("Turbidity:");
+    // lcd.print("   ");
+    // lcd.setCursor(10, 0);
+    //lcd.print(turbidity);
+    
+    delay(1000);
+    if ((turbidity > 0) && (turbidity < 50)) {
+      // lcd.setCursor(0, 1);
+      // lcd.print(" its CLEAR ");
+      Serial.println(" its CLEAR ");
+    }
+    if ((turbidity > 20) && (turbidity < 50)) {
+      // lcd.setCursor(0, 1);
+      // lcd.print(" its CLOUDY ");
+      Serial.println(" its CLOUDY ");
+    }
+    if (turbidity > 50) {
+      // lcd.setCursor(0, 1);
+      // lcd.print(" its DIRTY ");
+      Serial.println(" its DIRTY ");
+    }
+ }
 
+ void getTemp(){
+  //temp sensor
+    sensors.requestTemperatures(); 
+    float temperatureC = sensors.getTempCByIndex(0);
+    float temperatureF = sensors.getTempFByIndex(0);
+    Serial.print(temperatureC);
+    Serial.print("ºC ");
+    Serial.print(temperatureF);
+    Serial.println("ºF");
+    delay(1000);
+
+ }
+
+ void getPH(){
+  //ph sensor
+    Value= analogRead(PHPin);
+    Serial.print(Value);
+    Serial.print(" | ");
+    float voltage=Value*(3.3/4095.0);
+    ph=(3.3*voltage);
+    Serial.println(ph);
+    delay(1000);
  }
